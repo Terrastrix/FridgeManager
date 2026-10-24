@@ -4,6 +4,15 @@
     "slug": "fridgemanager",
     "scheme": "fridgemanager",
     "version": "1.0.0",
+    "runtimeVersion": "1.0.0",
+    "updates": {
+      "url": "https://u.expo.dev/93be9951-a703-4850-9706-dad1a681836e",
+      "checkAutomatically": "ON_LOAD",
+      "fallbackToCacheTimeout": 0,
+      "requestHeaders": {
+        "expo-channel-name": "production"
+      }
+    },
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -42,8 +51,9 @@
     ],
     "extra": {
       "eas": {
-        "projectId": ""
+        "projectId": "93be9951-a703-4850-9706-dad1a681836e"
       }
-    }
+    },
+    "owner": "terrastrix"
   }
 }
