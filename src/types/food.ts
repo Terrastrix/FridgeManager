@@ -31,8 +31,10 @@ export interface FoodItem {
   name: string;
   icon?: string;
   stockLevel: StockLevel;
-  /** ISO date string 'YYYY-MM-DD'、未設定は空文字 */
+  /** ISO date string 'YYYY-MM-DD'、未設定は空文字。冷蔵庫・野菜室の食材だけが持つ（purchaseDate と排他） */
   expiryDate?: string;
+  /** 購入日 'YYYY-MM-DD'。冷凍庫・パントリーの食材だけが持つ（expiryDate と排他） */
+  purchaseDate?: string;
   /** 賞味期限の目安日数（「買ってきた」時の初期値 = 今日 + この日数） */
   defaultExpiryDays?: number;
   tags: string[];

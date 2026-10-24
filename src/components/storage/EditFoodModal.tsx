@@ -13,6 +13,7 @@ import {
 import { FoodItem, StockLevel } from '../../types/food';
 import StockLevelSelector from './StockLevelSelector';
 import DatePickerField from './DatePickerField';
+import { dateKindFor, getFoodDate, withFoodDate, FOOD_DATE_LABELS } from '../../utils/foodDates';
 
 interface Props {
   visible: boolean;
@@ -25,7 +26,7 @@ export default function EditFoodModal({ visible, item, onSave, onClose }: Props)
   const [name, setName] = useState('');
   const [icon, setIcon] = useState('');
   const [tags, setTags] = useState('');
-  const [expiryDate, setExpiryDate] = useState('');
+  const [date, setDate] = useState('');
   const [expiryDays, setExpiryDays] = useState('');
   const [stockLevel, setStockLevel] = useState<StockLevel>(2);
 
@@ -34,7 +35,7 @@ export default function EditFoodModal({ visible, item, onSave, onClose }: Props)
       setName(item.name);
       setIcon(item.icon ?? '');
       setTags(item.tags.join(', '));
-      setExpiryDate(item.expiryDate ?? '');
+      setDate(getFoodDate(item) ?? '');
       setExpiryDays(item.defaultExpiryDays !== undefined ? String(item.defaultExpiryDays) : '');
       setStockLevel(item.stockLevel);
     }
@@ -44,18 +45,27 @@ export default function EditFoodModal({ visible, item, onSave, onClose }: Props)
     const trimmed = name.trim();
     if (!trimmed || !item) return;
     const parsedDays = parseInt(expiryDays, 10);
-    onSave({
-      ...item,
-      name: trimmed,
-      icon: icon.trim() || undefined,
-      tags: tags
-        .split(',')
-        .map((t) => t.trim())
-        .filter(Boolean),
-      expiryDate: expiryDate.trim() || undefined,
-      defaultExpiryDays: isNaN(parsedDays) ? undefined : parsedDays,
-      stockLevel,
-    });
+    // 冷凍庫・パントリーでは目安日数を入力しないので、保存済みの値をそのまま残す
+    const defaultExpiryDays =
+      dateKindFor(item.location) === 'purchase'
+        ? item.defaultExpiryDays
+        : isNaN(parsedDays) ? undefined : parsedDays;
+    onSave(
+      withFoodDate(
+        {
+          ...item,
+          name: trimmed,
+          icon: icon.trim() || undefined,
+          tags: tags
+            .split(',')
+            .map((t) => t.trim())
+            .filter(Boolean),
+          defaultExpiryDays,
+          stockLevel,
+        },
+        date.trim() || undefined,
+      ),
+    );
     onClose();
   }
 
@@ -64,6 +74,8 @@ export default function EditFoodModal({ visible, item, onSave, onClose }: Props)
   }
 
   if (!item) return null;
+
+  const dateKind = dateKindFor(item.location);
 
   return (
     <Modal
@@ -117,23 +129,28 @@ export default function EditFoodModal({ visible, item, onSave, onClose }: Props)
             returnKeyType="next"
           />
 
-          <Text style={styles.fieldLabel}>賞味期限</Text>
+          <Text style={styles.fieldLabel}>{FOOD_DATE_LABELS[dateKind]}</Text>
           <DatePickerField
-            testID="edit-food-expiry-input"
-            value={expiryDate || undefined}
-            onChange={(v) => setExpiryDate(v ?? '')}
+            testID={dateKind === 'purchase' ? 'edit-food-purchase-date-input' : 'edit-food-expiry-input'}
+            label={FOOD_DATE_LABELS[dateKind]}
+            value={date || undefined}
+            onChange={(v) => setDate(v ?? '')}
           />
 
-          <Text style={styles.fieldLabel}>賞味期限の目安（日数）</Text>
-          <TextInput
-            testID="edit-food-expiry-days-input"
-            style={styles.input}
-            value={expiryDays}
-            onChangeText={(t) => setExpiryDays(t.replace(/[^0-9]/g, ''))}
-            placeholder="例: 7（買ってきた時に今日+7日を初期値にする）"
-            placeholderTextColor="#aaa"
-            keyboardType="number-pad"
-          />
+          {dateKind === 'expiry' && (
+            <>
+              <Text style={styles.fieldLabel}>賞味期限の目安（日数）</Text>
+              <TextInput
+                testID="edit-food-expiry-days-input"
+                style={styles.input}
+                value={expiryDays}
+                onChangeText={(t) => setExpiryDays(t.replace(/[^0-9]/g, ''))}
+                placeholder="例: 7（買ってきた時に今日+7日を初期値にする）"
+                placeholderTextColor="#aaa"
+                keyboardType="number-pad"
+              />
+            </>
+          )}
 
           <Text style={styles.fieldLabel}>在庫</Text>
           <StockLevelSelector

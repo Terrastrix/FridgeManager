@@ -8,7 +8,7 @@ import {
 } from 'react-native';
 import { ShoppingItem } from '../../types/shopping';
 import { FoodItem, StorageLocation, STORAGE_LOCATIONS, LOCATION_LABELS } from '../../types/food';
-import { initialPurchaseExpiryDate } from '../../utils/expiryUtils';
+import { dateKindFor, initialDateOnPurchase, FOOD_DATE_LABELS } from '../../utils/foodDates';
 import DatePickerField from '../storage/DatePickerField';
 
 interface Props {
@@ -16,23 +16,33 @@ interface Props {
   item: ShoppingItem | null;
   /** 正規化名で一致した既存食材。null なら新規登録になる */
   matchedFood: FoodItem | null;
-  onConfirm: (expiryDate: string | undefined, location: StorageLocation) => void;
+  /** date は保管場所に応じて賞味期限か購入日として扱う */
+  onConfirm: (date: string | undefined, location: StorageLocation) => void;
   onClose: () => void;
 }
 
 export default function PurchasedModal({ visible, item, matchedFood, onConfirm, onClose }: Props) {
-  const [expiryDate, setExpiryDate] = useState<string | undefined>(undefined);
+  const [date, setDate] = useState<string | undefined>(undefined);
   const [location, setLocation] = useState<StorageLocation>('fridge');
 
   useEffect(() => {
     if (visible) {
-      // 目安日数が設定されていれば「今日+日数」、未設定（新規品目含む）なら翌日を初期値にする
-      setExpiryDate(initialPurchaseExpiryDate(matchedFood));
-      setLocation(matchedFood?.location ?? 'fridge');
+      // 賞味期限は目安日数があれば「今日+日数」、なければ翌日。購入日は今日を初期値にする
+      const initialLocation = matchedFood?.location ?? 'fridge';
+      setLocation(initialLocation);
+      setDate(initialDateOnPurchase(initialLocation, matchedFood));
     }
   }, [visible, matchedFood]);
 
   if (!item) return null;
+
+  const dateKind = dateKindFor(location);
+
+  function handleSelectLocation(loc: StorageLocation) {
+    // 賞味期限と購入日が切り替わるときは、入力中の日付をその項目の初期値に戻す
+    if (dateKindFor(loc) !== dateKind) setDate(initialDateOnPurchase(loc, matchedFood));
+    setLocation(loc);
+  }
 
   return (
     <Modal
@@ -51,11 +61,12 @@ export default function PurchasedModal({ visible, item, matchedFood, onConfirm, 
               : '新しい食材として在庫に登録します'}
           </Text>
 
-          <Text style={styles.fieldLabel}>賞味期限</Text>
+          <Text style={styles.fieldLabel}>{FOOD_DATE_LABELS[dateKind]}</Text>
           <DatePickerField
-            testID="purchased-expiry-input"
-            value={expiryDate}
-            onChange={setExpiryDate}
+            testID={dateKind === 'purchase' ? 'purchased-purchase-date-input' : 'purchased-expiry-input'}
+            label={FOOD_DATE_LABELS[dateKind]}
+            value={date}
+            onChange={setDate}
           />
 
           {!matchedFood && (
@@ -69,7 +80,7 @@ export default function PurchasedModal({ visible, item, matchedFood, onConfirm, 
                       key={loc}
                       testID={`purchased-location-${loc}`}
                       style={[styles.locationTab, isSelected && styles.locationTabSelected]}
-                      onPress={() => setLocation(loc)}
+                      onPress={() => handleSelectLocation(loc)}
                       accessibilityRole="tab"
                       accessibilityState={{ selected: isSelected }}
                     >
@@ -92,7 +103,7 @@ export default function PurchasedModal({ visible, item, matchedFood, onConfirm, 
             <TouchableOpacity
               testID="purchased-submit"
               style={styles.btnSubmit}
-              onPress={() => onConfirm(expiryDate, location)}
+              onPress={() => onConfirm(date, location)}
             >
               <Text style={styles.btnSubmitText}>在庫に反映</Text>
             </TouchableOpacity>

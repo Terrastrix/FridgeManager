@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet, Alert } from 'react-native';
 import { FoodItem, StockLevel, LOCATION_LABELS } from '../../types/food';
 import StockLevelSelector from './StockLevelSelector';
 import { getExpiryStatus } from '../../utils/expiryUtils';
+import { dateKindFor, formatJapaneseDate, getFoodDate, FOOD_DATE_LABELS } from '../../utils/foodDates';
 
 interface Props {
   item: FoodItem;
@@ -15,13 +16,6 @@ interface Props {
   onToggleView: () => void;
 }
 
-function formatExpiry(iso: string | undefined): string | null {
-  if (!iso || !iso.trim()) return null;
-  const parts = iso.split('-');
-  if (parts.length !== 3) return iso;
-  return `${parseInt(parts[0])}年${parseInt(parts[1])}月${parseInt(parts[2])}日`;
-}
-
 function FoodItemCard({
   item,
   isSimple,
@@ -32,8 +26,8 @@ function FoodItemCard({
   onEdit,
   onToggleView,
 }: Props) {
-  const expiry = formatExpiry(item.expiryDate);
-  const expiryStatus = getExpiryStatus(item.expiryDate);
+  const dateKind = dateKindFor(item.location);
+  const expiryStatus = dateKind === 'expiry' ? getExpiryStatus(item.expiryDate) : 'none';
 
   function handleDeletePress() {
     Alert.alert(
@@ -82,16 +76,16 @@ function FoodItemCard({
           </View>
         </View>
 
-        {/* 詳細表示のみ: 賞味期限・タグ */}
+        {/* 詳細表示のみ: 賞味期限（冷凍庫・パントリーは購入日）・タグ */}
         {!isSimple && (
           <>
             <View style={styles.expiryRow}>
               <Text
                 style={[styles.expiry, expiryStatus === 'expired' && styles.expiryExpired, expiryStatus === 'near' && styles.expiryNear]}
-                testID={`expiry-${item.id}`}
+                testID={dateKind === 'purchase' ? `purchase-date-${item.id}` : `expiry-${item.id}`}
               >
-                賞味期限{' '}
-                <Text style={styles.expiryValue}>{expiry ?? '未設定'}</Text>
+                {FOOD_DATE_LABELS[dateKind]}{' '}
+                <Text style={styles.expiryValue}>{formatJapaneseDate(getFoodDate(item))}</Text>
               </Text>
               {(expiryStatus === 'expired' || expiryStatus === 'near') && (
                 <View

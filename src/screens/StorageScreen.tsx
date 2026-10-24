@@ -14,6 +14,7 @@ import { useRepository } from '../hooks/useRepository';
 import { useAuth } from '../context/AuthContext';
 import { useSharing } from '../context/SharingContext';
 import { sortItemsByExpiryAscending } from '../utils/expirySort';
+import { clearExpiredExpiryDates } from '../utils/expiryUtils';
 import { DeepLinkTarget } from '../hooks/useNotificationDeepLink';
 import {
   getManualNotifyState,
@@ -140,6 +141,9 @@ export default function StorageScreen({ onOpenSettings, deepLinkTarget, onDeepLi
       ? sortItemsByExpiryAscending(items)
       : items.filter((item) => item.location === selectedLocation);
 
+  // 表示中の食材のうち、賞味期限が切れているもの（賞味期限を外した状態）
+  const expiryClearedItems = clearExpiredExpiryDates(visibleItems);
+
   const isSimpleForItem = useCallback(
     (id: string) => {
       if (id in simpleOverrides) return simpleOverrides[id];
@@ -165,6 +169,27 @@ export default function StorageScreen({ onOpenSettings, deepLinkTarget, onDeepLi
     repo.update(updated);
     setEditingItem(null);
   }, [repo]);
+
+  function handleClearExpiredDates() {
+    const cleared = expiryClearedItems;
+    Alert.alert(
+      '賞味期限の削除',
+      `賞味期限が切れている${cleared.length}件の賞味期限を削除しますか？
+食材は削除されません。`,
+      [
+        { text: 'キャンセル', style: 'cancel' },
+        {
+          text: '削除する',
+          style: 'destructive',
+          onPress: () => {
+            const byId = new Map(cleared.map((item) => [item.id, item]));
+            setItems((prev) => prev.map((item) => byId.get(item.id) ?? item));
+            for (const item of cleared) repo.update(item);
+          },
+        },
+      ],
+    );
+  }
 
   const handleToggleView = useCallback((id: string) => {
     setSimpleOverrides((prev) => {
@@ -279,6 +304,21 @@ export default function StorageScreen({ onOpenSettings, deepLinkTarget, onDeepLi
           </Text>
         </TouchableOpacity>
       </View>
+
+      {/* 期限切れの賞味期限の一括削除（対象があるときだけ表示） */}
+      {expiryClearedItems.length > 0 && (
+        <View style={styles.toolbarSecondary}>
+          <TouchableOpacity
+            testID="btn-clear-expired-dates"
+            style={[styles.btnBulk, styles.btnClearExpired]}
+            onPress={handleClearExpiredDates}
+          >
+            <Text style={[styles.btnBulkText, styles.btnClearExpiredText]}>
+              期限切れの賞味期限を削除（{expiryClearedItems.length}件）
+            </Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       {/* 共有メンバーへの通知 */}
       {NOTIFICATIONS_ENABLED && isLinked && effectiveOwnerUid && (
@@ -445,6 +485,13 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
     color: '#1a2e2a',
+  },
+  btnClearExpired: {
+    borderColor: 'rgba(199, 62, 62, 0.45)',
+    backgroundColor: '#fdf3f3',
+  },
+  btnClearExpiredText: {
+    color: '#c73e3e',
   },
   btnBulkDisabled: {
     opacity: 0.5,

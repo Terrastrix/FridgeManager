@@ -2,6 +2,7 @@ import * as SQLite from 'expo-sqlite';
 import { FoodItem, StockLevel } from '../types/food';
 import { FoodRepository } from './FoodRepository';
 import rawInitialData from '../data/initialFoodItems.json';
+import { normalizeFoodDates } from '../utils/foodDates';
 
 const db = SQLite.openDatabaseSync('fridgemanager.db');
 
@@ -15,34 +16,46 @@ function initDB(): void {
       expiry_date TEXT,
       tags TEXT NOT NULL DEFAULT '[]',
       location TEXT NOT NULL,
-      default_expiry_days INTEGER
+      default_expiry_days INTEGER,
+      purchase_date TEXT
     );
   `);
 
   // 既存インストール向けマイグレーション（カラムが既にあれば失敗するので無視）
-  try {
-    db.execSync('ALTER TABLE food_items ADD COLUMN default_expiry_days INTEGER;');
-  } catch {
-    // 既にカラムが存在する
+  for (const sql of [
+    'ALTER TABLE food_items ADD COLUMN default_expiry_days INTEGER;',
+    'ALTER TABLE food_items ADD COLUMN purchase_date TEXT;',
+  ]) {
+    try {
+      db.execSync(sql);
+    } catch {
+      // 既にカラムが存在する
+    }
   }
 
   const row = db.getFirstSync<{ count: number }>('SELECT COUNT(*) AS count FROM food_items;');
   if (row?.count === 0) {
     const initialItems = rawInitialData as FoodItem[];
     for (const item of initialItems) {
-      db.runSync(
-        'INSERT INTO food_items (id, name, icon, stock_level, expiry_date, tags, location, default_expiry_days) VALUES (?, ?, ?, ?, ?, ?, ?, ?);',
-        item.id,
-        item.name,
-        item.icon ?? null,
-        item.stockLevel,
-        item.expiryDate ?? null,
-        JSON.stringify(item.tags),
-        item.location,
-        item.defaultExpiryDays ?? null,
-      );
+      insertItem(item);
     }
   }
+}
+
+function insertItem(item: FoodItem): void {
+  const normalized = normalizeFoodDates(item);
+  db.runSync(
+    'INSERT INTO food_items (id, name, icon, stock_level, expiry_date, tags, location, default_expiry_days, purchase_date) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);',
+    normalized.id,
+    normalized.name,
+    normalized.icon ?? null,
+    normalized.stockLevel,
+    normalized.expiryDate ?? null,
+    JSON.stringify(normalized.tags),
+    normalized.location,
+    normalized.defaultExpiryDays ?? null,
+    normalized.purchaseDate ?? null,
+  );
 }
 
 interface FoodRow {
@@ -54,19 +67,22 @@ interface FoodRow {
   tags: string;
   location: string;
   default_expiry_days: number | null;
+  purchase_date: string | null;
 }
 
 function rowToFoodItem(row: FoodRow): FoodItem {
-  return {
+  // 購入日を導入する前に冷凍庫・パントリーで記録した賞味期限は使わない
+  return normalizeFoodDates({
     id: row.id,
     name: row.name,
     icon: row.icon ?? undefined,
     stockLevel: row.stock_level as StockLevel,
     expiryDate: row.expiry_date ?? undefined,
     defaultExpiryDays: row.default_expiry_days ?? undefined,
+    purchaseDate: row.purchase_date ?? undefined,
     tags: JSON.parse(row.tags) as string[],
     location: row.location as FoodItem['location'],
-  };
+  });
 }
 
 export class LocalRepository implements FoodRepository {
@@ -80,30 +96,22 @@ export class LocalRepository implements FoodRepository {
   }
 
   async add(item: FoodItem): Promise<void> {
-    db.runSync(
-      'INSERT INTO food_items (id, name, icon, stock_level, expiry_date, tags, location, default_expiry_days) VALUES (?, ?, ?, ?, ?, ?, ?, ?);',
-      item.id,
-      item.name,
-      item.icon ?? null,
-      item.stockLevel,
-      item.expiryDate ?? null,
-      JSON.stringify(item.tags),
-      item.location,
-      item.defaultExpiryDays ?? null,
-    );
+    insertItem(item);
   }
 
   async update(item: FoodItem): Promise<void> {
+    const normalized = normalizeFoodDates(item);
     db.runSync(
-      'UPDATE food_items SET name = ?, icon = ?, stock_level = ?, expiry_date = ?, tags = ?, location = ?, default_expiry_days = ? WHERE id = ?;',
-      item.name,
-      item.icon ?? null,
-      item.stockLevel,
-      item.expiryDate ?? null,
-      JSON.stringify(item.tags),
-      item.location,
-      item.defaultExpiryDays ?? null,
-      item.id,
+      'UPDATE food_items SET name = ?, icon = ?, stock_level = ?, expiry_date = ?, tags = ?, location = ?, default_expiry_days = ?, purchase_date = ? WHERE id = ?;',
+      normalized.name,
+      normalized.icon ?? null,
+      normalized.stockLevel,
+      normalized.expiryDate ?? null,
+      JSON.stringify(normalized.tags),
+      normalized.location,
+      normalized.defaultExpiryDays ?? null,
+      normalized.purchaseDate ?? null,
+      normalized.id,
     );
   }
 

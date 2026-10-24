@@ -186,6 +186,36 @@ describe('StorageScreen', () => {
     await expect(element(by.id('expiry-badge-3'))).not.toBeVisible();
   });
 
+  it('賞味期限未設定の食品はハイフンで表示される', async () => {
+    // ハム(id=3)は3番目のアイテム。一括削除ボタンの行があると画面外になるためスクロールして確認
+    await waitFor(element(by.id('expiry-3')))
+      .toBeVisible()
+      .whileElement(by.id('food-list'))
+      .scroll(300, 'down');
+    await expect(element(by.id('expiry-3'))).toHaveText('賞味期限 ----年-月-日');
+  });
+
+  it('冷凍庫の食品は賞味期限ではなく購入日が表示される', async () => {
+    await element(by.id('tab-freezer')).tap();
+    // 冷凍餃子(id=10)は purchaseDate=2026-03-20
+    await expect(element(by.id('purchase-date-10'))).toHaveText('購入日 2026年3月20日');
+    await expect(element(by.id('expiry-10'))).not.toExist();
+  });
+
+  it('期限切れの賞味期限を一括で削除できる', async () => {
+    // 豆腐(id=4)は expiryDate=2000-01-01 で常に期限切れなのでボタンが表示される
+    await element(by.id('btn-clear-expired-dates')).tap();
+    await element(by.text('削除する')).tap();
+    // 対象がなくなるとボタンは消え、食品は残ったまま賞味期限がハイフン表示になる
+    await expect(element(by.id('btn-clear-expired-dates'))).not.toExist();
+    await waitFor(element(by.id('expiry-4')))
+      .toBeVisible()
+      .whileElement(by.id('food-list'))
+      .scroll(300, 'down');
+    await expect(element(by.id('expiry-4'))).toHaveText('賞味期限 ----年-月-日');
+    await expect(element(by.id('expiry-badge-4'))).not.toExist();
+  });
+
   // ── 表示切替 ──────────────────────────────────────────
   it('一括簡易表示に切り替えられる', async () => {
     await expect(element(by.id('btn-bulk-view'))).toBeVisible();
