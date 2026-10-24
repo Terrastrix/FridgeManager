@@ -35,6 +35,27 @@ describe('Cloud*Repository.addAll', () => {
     ]);
   });
 
+  it('食品の購入日を書き込み、冷凍庫・パントリーの賞味期限は null にする', async () => {
+    await new CloudRepository('u1').addAll([
+      {
+        id: '10',
+        name: '冷凍餃子',
+        stockLevel: 1,
+        tags: [],
+        location: 'freezer',
+        expiryDate: '2026-08-01',
+        purchaseDate: '2026-03-20',
+      },
+    ]);
+
+    expect(entries()).toEqual([
+      [
+        'users/u1/food_items/10',
+        expect.objectContaining({ expiryDate: null, purchaseDate: '2026-03-20' }),
+      ],
+    ]);
+  });
+
   it('レシピを users/{uid}/recipes に一括書き込みする', async () => {
     await new CloudRecipeRepository('u1').addAll([
       { id: '2', name: '親子丼', ingredients: [{ name: '卵' }] },

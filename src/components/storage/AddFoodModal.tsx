@@ -12,6 +12,7 @@ import {
 import { FoodItem, StorageLocation, StockLevel, LOCATION_LABELS } from '../../types/food';
 import StockLevelSelector from './StockLevelSelector';
 import DatePickerField from './DatePickerField';
+import { dateKindFor, withFoodDate, FOOD_DATE_LABELS } from '../../utils/foodDates';
 
 interface Props {
   visible: boolean;
@@ -23,13 +24,14 @@ interface Props {
 export default function AddFoodModal({ visible, location, onAdd, onClose }: Props) {
   const [name, setName] = useState('');
   const [stockLevel, setStockLevel] = useState<StockLevel>(2);
-  const [expiryDate, setExpiryDate] = useState<string | undefined>(undefined);
+  const [date, setDate] = useState<string | undefined>(undefined);
   const [expiryDays, setExpiryDays] = useState('');
+  const dateKind = dateKindFor(location);
 
   function reset() {
     setName('');
     setStockLevel(2);
-    setExpiryDate(undefined);
+    setDate(undefined);
     setExpiryDays('');
   }
 
@@ -37,14 +39,18 @@ export default function AddFoodModal({ visible, location, onAdd, onClose }: Prop
     const trimmed = name.trim();
     if (!trimmed) return;
     const parsedDays = parseInt(expiryDays, 10);
-    onAdd({
-      name: trimmed,
-      stockLevel,
-      tags: [],
-      location,
-      expiryDate,
-      defaultExpiryDays: isNaN(parsedDays) ? undefined : parsedDays,
-    });
+    onAdd(
+      withFoodDate(
+        {
+          name: trimmed,
+          stockLevel,
+          tags: [],
+          location,
+          defaultExpiryDays: dateKind === 'expiry' && !isNaN(parsedDays) ? parsedDays : undefined,
+        },
+        date,
+      ),
+    );
     reset();
     onClose();
   }
@@ -84,23 +90,28 @@ export default function AddFoodModal({ visible, location, onAdd, onClose }: Prop
             onSubmitEditing={handleAdd}
           />
 
-          <Text style={styles.fieldLabel}>賞味期限</Text>
+          <Text style={styles.fieldLabel}>{FOOD_DATE_LABELS[dateKind]}</Text>
           <DatePickerField
-            testID="add-food-expiry-input"
-            value={expiryDate}
-            onChange={setExpiryDate}
+            testID={dateKind === 'purchase' ? 'add-food-purchase-date-input' : 'add-food-expiry-input'}
+            label={FOOD_DATE_LABELS[dateKind]}
+            value={date}
+            onChange={setDate}
           />
 
-          <Text style={styles.fieldLabel}>賞味期限の目安（日数）</Text>
-          <TextInput
-            testID="add-food-expiry-days-input"
-            style={styles.input}
-            value={expiryDays}
-            onChangeText={(t) => setExpiryDays(t.replace(/[^0-9]/g, ''))}
-            placeholder="例: 7（買ってきた時に今日+7日を初期値にする）"
-            placeholderTextColor="#aaa"
-            keyboardType="number-pad"
-          />
+          {dateKind === 'expiry' && (
+            <>
+              <Text style={styles.fieldLabel}>賞味期限の目安（日数）</Text>
+              <TextInput
+                testID="add-food-expiry-days-input"
+                style={styles.input}
+                value={expiryDays}
+                onChangeText={(t) => setExpiryDays(t.replace(/[^0-9]/g, ''))}
+                placeholder="例: 7（買ってきた時に今日+7日を初期値にする）"
+                placeholderTextColor="#aaa"
+                keyboardType="number-pad"
+              />
+            </>
+          )}
 
           <Text style={styles.fieldLabel}>在庫</Text>
           <StockLevelSelector

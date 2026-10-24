@@ -40,6 +40,26 @@ describe('LocalRepository', () => {
     );
   });
 
+  it('初期化で purchase_date のマイグレーション（ALTER TABLE）を試みる', () => {
+    new LocalRepository();
+
+    expect(mockDb.execSync).toHaveBeenCalledWith(
+      expect.stringContaining('ALTER TABLE food_items ADD COLUMN purchase_date'),
+    );
+  });
+
+  it('default_expiry_days のALTER TABLEが失敗しても purchase_date のマイグレーションを試みる', () => {
+    mockDb.execSync.mockImplementation((sql: string) => {
+      if (sql.includes('ADD COLUMN default_expiry_days')) throw new Error('duplicate column name');
+    });
+
+    new LocalRepository();
+
+    expect(mockDb.execSync).toHaveBeenCalledWith(
+      expect.stringContaining('ALTER TABLE food_items ADD COLUMN purchase_date'),
+    );
+  });
+
   it('カラムが既に存在してALTER TABLEが失敗しても初期化は成功する', () => {
     mockDb.execSync.mockImplementation((sql: string) => {
       if (sql.includes('ALTER TABLE')) throw new Error('duplicate column name');
@@ -103,7 +123,85 @@ describe('LocalRepository', () => {
       '[]',
       'pantry',
       3,
+      null,
     );
+  });
+
+  it('getAllが purchase_date を purchaseDate にマップし、冷凍庫・パントリーの賞味期限は使わない', async () => {
+    mockDb.getAllSync.mockReturnValue([
+      {
+        id: '10',
+        name: '冷凍餃子',
+        icon: '🥟',
+        stock_level: 1,
+        expiry_date: '2026-08-01',
+        tags: '[]',
+        location: 'freezer',
+        default_expiry_days: 90,
+        purchase_date: '2026-03-20',
+      },
+      {
+        id: '1',
+        name: '牛乳',
+        icon: '🥛',
+        stock_level: 2,
+        expiry_date: '2026-04-08',
+        tags: '[]',
+        location: 'fridge',
+        default_expiry_days: 7,
+        purchase_date: '2026-04-01',
+      },
+    ]);
+
+    const repo = new LocalRepository();
+    const [gyoza, milk] = await repo.getAll();
+
+    expect(gyoza.purchaseDate).toBe('2026-03-20');
+    expect(gyoza.expiryDate).toBeUndefined();
+    expect(milk.expiryDate).toBe('2026-04-08');
+    expect(milk.purchaseDate).toBeUndefined();
+  });
+
+  it('addがパントリーの食材を購入日だけでINSERTする（賞味期限は保存しない）', async () => {
+    const repo = new LocalRepository();
+    mockDb.runSync.mockClear();
+
+    await repo.add({
+      id: '101',
+      name: '米',
+      stockLevel: 2,
+      tags: [],
+      location: 'pantry',
+      expiryDate: '2026-12-31',
+      purchaseDate: '2026-10-24',
+    });
+
+    expect(mockDb.runSync).toHaveBeenCalledWith(
+      expect.stringContaining('purchase_date'),
+      '101',
+      '米',
+      null,
+      2,
+      null,
+      '[]',
+      'pantry',
+      null,
+      '2026-10-24',
+    );
+  });
+
+  it('初期データの冷凍庫・パントリーの食材は賞味期限を持たない', () => {
+    mockDb.getFirstSync.mockReturnValue({ count: 0 });
+
+    new LocalRepository();
+
+    const inserts = mockDb.runSync.mock.calls.filter(([sql]) => String(sql).startsWith('INSERT'));
+    expect(inserts.length).toBeGreaterThan(0);
+    for (const call of inserts) {
+      const expiryDate = call[5];
+      const location = call[7];
+      if (location === 'freezer' || location === 'pantry') expect(expiryDate).toBeNull();
+    }
   });
 
   it('updateが defaultExpiryDays を含めてUPDATEする', async () => {
@@ -129,6 +227,7 @@ describe('LocalRepository', () => {
       '[]',
       'fridge',
       5,
+      null,
       '1',
     );
   });

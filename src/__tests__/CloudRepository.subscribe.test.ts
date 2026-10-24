@@ -35,6 +35,7 @@ function makeSnapshotDocs(items: FoodItem[]) {
         icon: item.icon ?? null,
         stockLevel: item.stockLevel,
         expiryDate: item.expiryDate ?? null,
+        purchaseDate: item.purchaseDate ?? null,
         tags: item.tags,
         location: item.location,
       }),
@@ -77,6 +78,35 @@ describe('CloudRepository.subscribe', () => {
       expect.objectContaining({ id: '1', name: '牛乳' }),
       expect.objectContaining({ id: '2', name: '卵' }),
     ]);
+  });
+
+  it('購入日を読み、冷凍庫・パントリーに残っている賞味期限は使わない', () => {
+    let capturedCallback: ((snapshot: ReturnType<typeof makeSnapshotDocs>) => void) | null = null;
+    (onSnapshot as jest.Mock).mockImplementation((_query, cb) => {
+      capturedCallback = cb;
+      return () => {};
+    });
+
+    const callback = jest.fn();
+    repo.subscribe(callback);
+
+    capturedCallback!(
+      makeSnapshotDocs([
+        {
+          id: '10',
+          name: '冷凍餃子',
+          stockLevel: 1,
+          tags: [],
+          location: 'freezer',
+          expiryDate: '2026-08-01',
+          purchaseDate: '2026-03-20',
+        },
+      ]),
+    );
+
+    const [[items]] = callback.mock.calls;
+    expect(items[0].purchaseDate).toBe('2026-03-20');
+    expect(items[0].expiryDate).toBeUndefined();
   });
 
   it('スナップショットが複数回来るたびにコールバックが呼ばれる', () => {

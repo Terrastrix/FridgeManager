@@ -1,3 +1,5 @@
+import { FoodItem } from '../types/food';
+
 export type ExpiryStatus = 'expired' | 'near' | 'ok' | 'none';
 
 /**
@@ -30,10 +32,10 @@ export function initialPurchaseExpiryDate(
 }
 
 /** 賞味期限の状態を返す。near は残り3日以内（当日含まず）*/
-export function getExpiryStatus(expiryDate: string | undefined): ExpiryStatus {
+export function getExpiryStatus(expiryDate: string | undefined, from: Date = new Date()): ExpiryStatus {
   if (!expiryDate || !expiryDate.trim()) return 'none';
 
-  const today = new Date();
+  const today = new Date(from);
   today.setHours(0, 0, 0, 0);
 
   const expiry = new Date(expiryDate);
@@ -45,4 +47,11 @@ export function getExpiryStatus(expiryDate: string | undefined): ExpiryStatus {
   if (diffDays <= 3) return 'near';
 
   return 'ok';
+}
+
+/** 賞味期限が切れている食材だけを取り出し、賞味期限を外したものを返す */
+export function clearExpiredExpiryDates(items: FoodItem[], from: Date = new Date()): FoodItem[] {
+  return items
+    .filter((item) => getExpiryStatus(item.expiryDate, from) === 'expired')
+    .map((item) => ({ ...item, expiryDate: undefined }));
 }

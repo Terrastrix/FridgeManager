@@ -26,6 +26,7 @@ import RecipeDetailModal from '../components/recipe/RecipeDetailModal';
 import ShoppingListView from '../components/recipe/ShoppingListView';
 import PurchasedModal from '../components/recipe/PurchasedModal';
 import { StorageLocation } from '../types/food';
+import { withFoodDate } from '../utils/foodDates';
 
 // 再起動時のID衝突を避けるため時刻起点の連番を採用（シードIDの1〜3とは衝突しない）
 let nextRecipeId = Date.now();
@@ -169,22 +170,24 @@ export default function RecipeScreen() {
   const purchasedMatchedFood = purchasedItem ? findFoodByName(foodItems, purchasedItem.name) : undefined;
 
   const handlePurchasedConfirm = useCallback(
-    (expiryDate: string | undefined, location: StorageLocation) => {
+    (date: string | undefined, location: StorageLocation) => {
       if (!purchasedItem) return;
       const matched = findFoodByName(foodItems, purchasedItem.name);
       if (matched) {
-        const updated: FoodItem = { ...matched, stockLevel: 2, expiryDate };
+        const updated: FoodItem = withFoodDate({ ...matched, stockLevel: 2 }, date);
         setFoodItems((prev) => prev.map((f) => (f.id === matched.id ? updated : f)));
         foodRepo.update(updated);
       } else {
-        const newFood: FoodItem = {
-          id: String(nextFoodId++),
-          name: purchasedItem.name,
-          stockLevel: 2,
-          expiryDate,
-          tags: [],
-          location,
-        };
+        const newFood: FoodItem = withFoodDate(
+          {
+            id: String(nextFoodId++),
+            name: purchasedItem.name,
+            stockLevel: 2,
+            tags: [],
+            location,
+          },
+          date,
+        );
         setFoodItems((prev) => [...prev, newFood]);
         foodRepo.add(newFood);
       }

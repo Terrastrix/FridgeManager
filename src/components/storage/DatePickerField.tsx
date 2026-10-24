@@ -1,10 +1,13 @@
 import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
+import { formatJapaneseDate, toISODate } from '../../utils/foodDates';
 
 interface Props {
   value: string | undefined;
   onChange: (value: string | undefined) => void;
+  /** 読み上げに使う項目名（例: 賞味期限、購入日） */
+  label?: string;
   testID?: string;
 }
 
@@ -14,25 +17,12 @@ function toDate(iso: string | undefined): Date {
   return isNaN(d.getTime()) ? new Date() : d;
 }
 
-function toISO(date: Date): string {
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, '0');
-  const d = String(date.getDate()).padStart(2, '0');
-  return `${y}-${m}-${d}`;
-}
-
-function formatJP(iso: string): string {
-  const parts = iso.split('-');
-  if (parts.length !== 3) return iso;
-  return `${parseInt(parts[0])}年${parseInt(parts[1])}月${parseInt(parts[2])}日`;
-}
-
-export default function DatePickerField({ value, onChange, testID }: Props) {
+export default function DatePickerField({ value, onChange, label = '賞味期限', testID }: Props) {
   const [show, setShow] = useState(false);
 
   function handleChange(_event: DateTimePickerEvent, date?: Date) {
     if (Platform.OS === 'android') setShow(false);
-    if (date) onChange(toISO(date));
+    if (date) onChange(toISODate(date));
   }
 
   function handleClear() {
@@ -46,10 +36,10 @@ export default function DatePickerField({ value, onChange, testID }: Props) {
         testID={testID}
         style={styles.field}
         onPress={() => setShow(true)}
-        accessibilityLabel="賞味期限を選択"
+        accessibilityLabel={`${label}を選択`}
       >
         <Text style={[styles.fieldText, !value && styles.placeholder]}>
-          {value ? formatJP(value) : '未設定（タップして選択）'}
+          {value ? formatJapaneseDate(value) : '未設定（タップして選択）'}
         </Text>
         <Text style={styles.calIcon}>📅</Text>
       </TouchableOpacity>

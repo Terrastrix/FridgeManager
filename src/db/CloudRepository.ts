@@ -13,34 +13,39 @@ import { db } from '../config/firebase';
 import { setAllInBatches } from './batchWrite';
 import { FoodItem, StockLevel } from '../types/food';
 import { FoodRepository } from './FoodRepository';
+import { normalizeFoodDates } from '../utils/foodDates';
 
 function foodItemPath(uid: string) {
   return collection(db, 'users', uid, 'food_items');
 }
 
 function toDoc(item: FoodItem): Record<string, unknown> {
+  const normalized = normalizeFoodDates(item);
   return {
-    name: item.name,
-    icon: item.icon ?? null,
-    stockLevel: item.stockLevel,
-    expiryDate: item.expiryDate ?? null,
-    defaultExpiryDays: item.defaultExpiryDays ?? null,
-    tags: item.tags,
-    location: item.location,
+    name: normalized.name,
+    icon: normalized.icon ?? null,
+    stockLevel: normalized.stockLevel,
+    expiryDate: normalized.expiryDate ?? null,
+    defaultExpiryDays: normalized.defaultExpiryDays ?? null,
+    purchaseDate: normalized.purchaseDate ?? null,
+    tags: normalized.tags,
+    location: normalized.location,
   };
 }
 
 function fromDoc(id: string, data: Record<string, unknown>): FoodItem {
-  return {
+  // 購入日を導入する前に冷凍庫・パントリーで記録した賞味期限は使わない
+  return normalizeFoodDates({
     id,
     name: data.name as string,
     icon: (data.icon as string | null) ?? undefined,
     stockLevel: data.stockLevel as StockLevel,
     expiryDate: (data.expiryDate as string | null) ?? undefined,
     defaultExpiryDays: (data.defaultExpiryDays as number | null) ?? undefined,
+    purchaseDate: (data.purchaseDate as string | null) ?? undefined,
     tags: data.tags as string[],
     location: data.location as FoodItem['location'],
-  };
+  });
 }
 
 export class CloudRepository implements FoodRepository {
