@@ -187,6 +187,11 @@ describe('StorageScreen', () => {
   });
 
   it('賞味期限未設定の食品はハイフンで表示される', async () => {
+    // ハム(id=3)は3番目のアイテム。一括削除ボタンの行があると画面外になるためスクロールして確認
+    await waitFor(element(by.id('expiry-3')))
+      .toBeVisible()
+      .whileElement(by.id('food-list'))
+      .scroll(300, 'down');
     await expect(element(by.id('expiry-3'))).toHaveText('賞味期限 ----年-月-日');
   });
 
