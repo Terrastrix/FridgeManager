@@ -19,10 +19,11 @@ CI（Unit / Firestore ルール / E2E）グリーン。**
 - **Auth永続化は AsyncStorage**（`src/config/firebase.ts`）。再起動後もログイン保持
 - 実装済み機能: レシピCRUD+在庫照合、買い物リスト、賞味期限目安日数、在庫ステータス2/3段階切替、
   購入日（冷凍庫・パントリーは賞味期限の代わりに購入日を記録）、期限切れの賞味期限の一括削除、
+  EAS Update によるアプリ内容の更新配信（手順は `RELEASE.md` の6章）、
   履歴タブ（通知有効時のみ）、Google連携による家族共有（招待コード・メンバー管理・表示名）
 - データは2層構成（ローカルSQLite / Googleリンク時Firestore共有）
 
-Jest 259件・Firestore ルールテスト 24件・Detox E2E 47件。
+Jest 279件・Firestore ルールテスト 24件・Detox E2E 47件。
 
 ## 次にやること（リリースまで）
 

@@ -5,7 +5,8 @@
 以下の**手動作業**を上から順に実施してください。
 
 前提:
-- このアプリは EAS を使わず、ローカルの `gradlew` で直接ビルドします（bare workflow）。
+- このアプリは EAS Build を使わず、ローカルの `gradlew` で直接ビルドします（bare workflow）。
+  JavaScript だけの修正は EAS Update で配信します（6章）。
 - 通知機能はフィーチャーフラグ（`src/config/features.ts` の `NOTIFICATIONS_ENABLED=false`）で
   無効化中です。実機2台でテストできる環境が整ったら `true` に戻して再ビルドしてください。
 - プロジェクトルートは `C:\dev\github.com\Terrastrix\FridgeManager` です。
@@ -199,8 +200,63 @@ gradlew.bat bundleRelease
    条件を満たしたらダッシュボードから製品版へのアクセスを申請する
 8. 審査提出 → 承認後に公開
 
-> **バージョン更新時**: `android/app/build.gradle` の `versionCode`（現在1）を必ず+1、
+> **バージョン更新時**: `android/app/build.gradle` の `versionCode`（現在2）を必ず+1、
 > `versionName`（現在1.0.0）も適宜更新してから再ビルド。
+
+---
+
+## 6. アプリ内容の更新配信（EAS Update）
+
+JavaScript と画像などのアセットだけの修正は、ストアを通さずに EAS Update で配信します。
+アプリは起動のたびに更新を確認して裏でダウンロードし、次に起動したときに反映します。
+設定画面の「アプリの更新」にある「更新を確認」からは、その場でダウンロードして再起動できます。
+
+- EAS のプロジェクト: [@terrastrix/fridgemanager](https://expo.dev/accounts/terrastrix/projects/fridgemanager)
+- チャンネル: `production`（ビルドに埋め込み済み。`AndroidManifest.xml` の `UPDATES_CONFIGURATION_REQUEST_HEADERS_KEY`）
+- Free プランで、月1,000人のアクティブユーザーまで配信できます。
+
+### 6-1. 配信できる修正とできない修正
+
+更新が届くのは、ランタイムバージョンが同じビルドだけです。ランタイムバージョンは
+`app.json` の `runtimeVersion` と `android/app/src/main/res/values/strings.xml` の
+`expo_runtime_version` の2か所に書きます（現在 `1.0.0`。一致は `src/__tests__/updatesConfig.test.ts` で検証）。
+
+| 修正の種類 | 届け方 |
+|---|---|
+| `src/` 以下の画面・処理、`assets/` の画像 | EAS Update で配信 |
+| ネイティブのライブラリの追加・更新、`android/` 以下、ネイティブに反映される `app.json` の設定（権限・アイコンなど） | ストアで更新 |
+
+ストアで更新するときは、ランタイムバージョンを2か所とも上げ（例: `1.0.0` → `1.1.0`）、
+`versionCode` も上げてからビルドします。古いビルドが新しいネイティブコードを前提にした JavaScript を
+受け取ると起動できなくなるため、ランタイムバージョンが違うビルドには更新が届かないようになっています。
+
+### 6-2. 配信のしかた
+
+EAS CLI（`npm install --global eas-cli`）を入れ、`eas login` で terrastrix アカウントにログインしてから、
+コマンドプロンプト（cmd）で次を実行します。
+
+```bat
+cd /d C:\dev\github.com\Terrastrix\FridgeManager
+eas update --channel production --platform android --message "変更内容の説明"
+```
+
+`eas update` はこのPCで JavaScript をビルドしてアップロードします。`EXPO_PUBLIC_` で始まる値は、
+このPCの `.env` から埋め込まれます。
+
+### 6-3. 配信した更新を取り消す
+
+```bat
+eas update:rollback --platform android
+```
+
+対話形式で、1つ前の更新か、ビルドに内蔵された版に戻せます。
+
+### 6-4. 実機での確認
+
+1. この仕組みを組み込んだビルド（2026-10-25 以降の main）を実機に入れる
+2. 6-2 の手順で更新を配信する
+3. アプリの設定画面で「更新を確認」を押し、「再起動する」を選ぶ
+4. 「現在の内容」が「〜に配信された更新」になっていることを確かめる
 
 ---
 
@@ -211,4 +267,4 @@ gradlew.bat bundleRelease
   権限をクリーンにしたい場合はプラグイン行を一時的に外して `npx expo prebuild --platform android` で
   android/ を再生成できますが、通知を再有効化する予定なら残しておくのが簡単です。
 - **通知機能の再有効化**: `src/config/features.ts` の `NOTIFICATIONS_ENABLED` を `true` にし、
-  `eas init` で `app.json` の `extra.eas.projectId` を設定 → 再ビルド。詳細は `e2e/manual/notifications.md`。
+  再ビルド（`app.json` の `extra.eas.projectId` は 6章の EAS Update の導入時に設定済み）。詳細は `e2e/manual/notifications.md`。

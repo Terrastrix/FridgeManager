@@ -45,6 +45,9 @@ async function renderScreen() {
   return utils;
 }
 
+// 最初のテストで StorageScreen とその依存モジュールを読み込むため、CI では既定の5秒を超えることがある
+jest.setTimeout(20000);
+
 describe('StorageScreen 期限切れの賞味期限の一括削除', () => {
   beforeEach(() => {
     jest.clearAllMocks();

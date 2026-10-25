@@ -20,6 +20,7 @@ import { useRepository } from '../hooks/useRepository';
 import { AuthService } from '../services/AuthService';
 import LinkGoogleButton from '../components/LinkGoogleButton';
 import DisplayNameModal from '../components/DisplayNameModal';
+import AppUpdateSection from '../components/AppUpdateSection';
 import { JOINED_TITLE, joinedMessage, sharingStatusLabel } from '../utils/sharingMessages';
 import {
   getMyDisplayName,
@@ -604,6 +605,8 @@ export default function SettingsScreen({ onBack, authService }: Props) {
             </TouchableOpacity>
           </View>
         )}
+
+        <AppUpdateSection />
       </ScrollView>
       <DisplayNameModal
         visible={nameModal !== null}
