@@ -200,7 +200,7 @@ gradlew.bat bundleRelease
    条件を満たしたらダッシュボードから製品版へのアクセスを申請する
 8. 審査提出 → 承認後に公開
 
-> **バージョン更新時**: `android/app/build.gradle` の `versionCode`（現在1）を必ず+1、
+> **バージョン更新時**: `android/app/build.gradle` の `versionCode`（現在2）を必ず+1、
 > `versionName`（現在1.0.0）も適宜更新してから再ビルド。
 
 ---
