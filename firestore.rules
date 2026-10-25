@@ -28,6 +28,49 @@ service cloud.firestore {
         && get(invitePath).data.expiresAt > request.time;
     }
 
+    // ---- 家計簿（HouseAccountBook。docs/firebase-design.md）----
+    // 書き込みの多くはオーナー本人（Claude Code の MCP サーバー）だけ。共有メンバーの家族は閲覧が中心で、
+    // 外食の記録の入力・自分の記録の修正と、お店の追加だけができる。
+
+    function isOwner(ownerUid) {
+      return isSignedIn() && request.auth.uid == ownerUid;
+    }
+
+    function isOptionalString(data, key, maxSize) {
+      return !(key in data) || (data[key] is string && data[key].size() <= maxSize);
+    }
+
+    // 外食の記録1件。日付は YYYY-MM-DD、month は日付の年月と一致させる
+    function isValidDining(d) {
+      return d.keys().hasAll(['date', 'month', 'storeId', 'amount', 'createdBy', 'createdAt', 'updatedAt'])
+        && d.keys().hasOnly(['date', 'month', 'storeId', 'amount', 'note', 'createdBy', 'createdByName',
+                             'createdAt', 'updatedAt'])
+        && d.month is string && d.month.matches('^[0-9]{4}-[0-9]{2}$')
+        && d.date is string && d.date.matches('^' + d.month + '-[0-9]{2}$')
+        && d.storeId is string && d.storeId.size() >= 1 && d.storeId.size() <= 100
+        && d.amount is int && d.amount > 0 && d.amount < 10000000
+        && isOptionalString(d, 'note', 200)
+        && isOptionalString(d, 'createdByName', 20)
+        && d.updatedAt == request.time;
+    }
+
+    // お店マスタに家族が足す1件。createdBy は書き込んだ本人
+    function isValidNewStore(s) {
+      return s.keys().hasAll(['name', 'aliases', 'kind', 'createdBy', 'createdAt'])
+        && s.keys().hasOnly(['name', 'aliases', 'kind', 'createdBy', 'createdAt'])
+        && s.name is string && s.name.size() >= 1 && s.name.size() <= 50
+        && s.aliases is list && s.aliases.size() <= 20
+        && s.kind in ['supermarket', 'convenience', 'drugstore', 'dining', 'other']
+        && s.createdBy == request.auth.uid
+        && s.createdAt == request.time;
+    }
+
+    // 更新番号の key を1つ増やす書き込みか（元の値がなければ 0 とみなす）
+    function isIncrementedByOne(key) {
+      let before = resource == null ? 0 : resource.data.get(key, 0);
+      return request.resource.data[key] == before + 1;
+    }
+
     match /users/{ownerUid} {
 
       // 自分が属する共有グループ（users/{uid}/profile/sharing）。本人だけが読み書きできる
@@ -118,6 +161,87 @@ service cloud.firestore {
       // 前回通知時点の在庫スナップショット（履歴の差分計算用）
       match /meta/stockSnapshot {
         allow read, write: if isSelfOrMember(ownerUid);
+      }
+
+      // ---- 家計簿 ----
+
+      // 月ごとのレシート（明細つき）。ドキュメント ID は YYYY-MM
+      match /kakeibo_months/{month} {
+        allow read: if isSelfOrMember(ownerUid);
+        allow create, update: if isOwner(ownerUid)
+          && month.matches('^[0-9]{4}-[0-9]{2}$')
+          && request.resource.data.keys().hasOnly(['month', 'receipts', 'updatedAt'])
+          && request.resource.data.month == month
+          && request.resource.data.receipts is list;
+        allow delete: if isOwner(ownerUid);
+      }
+
+      // 外食の記録。家族も入力でき、自分が入力した記録は直せる。削除はオーナーだけ
+      match /kakeibo_dining/{diningId} {
+        allow read: if isSelfOrMember(ownerUid);
+        allow create: if isSelfOrMember(ownerUid)
+          && isValidDining(request.resource.data)
+          && request.resource.data.createdBy == request.auth.uid
+          && request.resource.data.createdAt == request.time;
+        allow update: if isSelfOrMember(ownerUid)
+          && (isOwner(ownerUid) || resource.data.createdBy == request.auth.uid)
+          && isValidDining(request.resource.data)
+          && request.resource.data.createdBy == resource.data.createdBy
+          && request.resource.data.createdAt == resource.data.createdAt;
+        allow delete: if isOwner(ownerUid);
+      }
+
+      // 商品マスタと、FridgeManager の食材との対応表。書き込みはオーナーだけ
+      match /kakeibo_meta/products {
+        allow read: if isSelfOrMember(ownerUid);
+        allow write: if isOwner(ownerUid)
+          && request.resource.data.keys().hasOnly(['products', 'updatedAt'])
+          && request.resource.data.products is map;
+      }
+
+      match /kakeibo_meta/fridge_aliases {
+        allow read: if isSelfOrMember(ownerUid);
+        allow write: if isOwner(ownerUid)
+          && request.resource.data.keys().hasOnly(['aliases', 'updatedAt'])
+          && request.resource.data.aliases is map;
+      }
+
+      // お店マスタ。オーナーは自由に直せる。家族は lastAddedStoreId で示した1件を足すことだけができる
+      match /kakeibo_meta/stores {
+        allow read: if isSelfOrMember(ownerUid);
+        allow write: if isOwner(ownerUid)
+          && request.resource.data.keys().hasOnly(['stores', 'updatedAt', 'lastAddedStoreId'])
+          && request.resource.data.stores is map;
+        allow create: if isMember(ownerUid)
+          && request.resource.data.keys().hasOnly(['stores', 'updatedAt', 'lastAddedStoreId'])
+          && request.resource.data.stores.keys().hasOnly([request.resource.data.lastAddedStoreId])
+          && isValidNewStore(request.resource.data.stores[request.resource.data.lastAddedStoreId]);
+        allow update: if isMember(ownerUid)
+          && request.resource.data.diff(resource.data).affectedKeys()
+               .hasOnly(['stores', 'updatedAt', 'lastAddedStoreId'])
+          && request.resource.data.stores.diff(resource.data.stores).addedKeys()
+               .hasOnly([request.resource.data.lastAddedStoreId])
+          && request.resource.data.stores.diff(resource.data.stores).addedKeys().size() == 1
+          && request.resource.data.stores.diff(resource.data.stores).changedKeys().size() == 0
+          && request.resource.data.stores.diff(resource.data.stores).removedKeys().size() == 0
+          && isValidNewStore(request.resource.data.stores[request.resource.data.lastAddedStoreId]);
+      }
+
+      // 更新番号。オーナーは自由に書ける。家族は外食（dining）とお店（stores）の番号を1つ増やすことだけができる
+      match /kakeibo_meta/version {
+        allow read: if isSelfOrMember(ownerUid);
+        allow write: if isOwner(ownerUid);
+        allow create: if isMember(ownerUid)
+          && request.resource.data.keys().hasOnly(['dining', 'stores'])
+          && request.resource.data.keys().hasAny(['dining', 'stores'])
+          && (!('dining' in request.resource.data) || isIncrementedByOne('dining'))
+          && (!('stores' in request.resource.data) || isIncrementedByOne('stores'));
+        allow update: if isMember(ownerUid)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['dining', 'stores'])
+          && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['dining'])
+              || isIncrementedByOne('dining'))
+          && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['stores'])
+              || isIncrementedByOne('stores'));
       }
     }
 
